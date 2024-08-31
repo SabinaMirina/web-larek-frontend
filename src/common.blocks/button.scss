@@ -17,4 +17,16 @@
     @include mixins.button(white, $primaryLight, $primaryLight);
     border: $hoverBorder;
   }
+
+  &_submit_disabled {
+    opacity: 0.2;
+    pointer-events: none;
+  }
+
+  &_active {
+    @include mixins.button($primary, $primaryLight, $primary); 
+    border: $hoverBorder; 
+    box-shadow: 0 0 10px rgba($primary, 0.5); 
+    color: white; 
+  }
 }
