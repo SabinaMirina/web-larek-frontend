@@ -1,7 +1,7 @@
-import { IItem, ItemCategory } from '../../../types/index';
-import { formatNumber } from '../../../utils/utils';
-import { IEvents } from '../events';
-import { Component } from './Component';
+import { IItem, ItemCategory } from '../../types';
+import { ensureElement, formatNumber } from '../../utils/utils';
+import { Component } from './base/Component';
+import { IEvents } from './base/EventEmitter';
 
 interface IItemBehaviour {
 	onClick: (event: MouseEvent) => void;
@@ -25,8 +25,8 @@ export abstract class Item extends Component<IItemCard> {
 		super(container);
 
 		// Инициализация полей карточки
-		this._title = this.container.querySelector<HTMLElement>('.card__title');
-		this._price = this.container.querySelector<HTMLElement>('.card__price');
+		this._title = ensureElement<HTMLElement>('.card__title', this.container);
+		this._price = ensureElement<HTMLElement>('.card__price', this.container);
 
 		if (actions?.onClick) {
 			if (this._button) {
@@ -94,10 +94,14 @@ export class ItemsGallery extends Item {
 		super(container, actions);
 
 		// Инициализация полей для списка
-		this._image =
-			this.container.querySelector<HTMLImageElement>('.card__image');
-		this._category =
-			this.container.querySelector<HTMLElement>('.card__category');
+		this._image = ensureElement<HTMLImageElement>(
+			'.card__image',
+			this.container
+		);
+		this._category = ensureElement<HTMLElement>(
+			'.card__category',
+			this.container
+		);
 		this.cardGallery =
 			this.container.querySelector<HTMLButtonElement>('.gallery__item');
 	}
@@ -109,14 +113,22 @@ export class CardModal extends Item {
 		super(container);
 
 		// Инициализация полей для предварительного просмотра
-		this._image =
-			this.container.querySelector<HTMLImageElement>('.card__image');
-		this._category =
-			this.container.querySelector<HTMLElement>('.card__category');
-		this._description =
-			this.container.querySelector<HTMLElement>('.card__text');
-		this._button =
-			this.container.querySelector<HTMLButtonElement>('.card__button');
+		this._image = ensureElement<HTMLImageElement>(
+			'.card__image',
+			this.container
+		);
+		this._category = ensureElement<HTMLElement>(
+			'.card__category',
+			this.container
+		);
+		this._description = ensureElement<HTMLElement>(
+			'.card__text',
+			this.container
+		);
+		this._button = ensureElement<HTMLButtonElement>(
+			'.card__button',
+			this.container
+		);
 
 		this._button.addEventListener('click', (event) => {
 			event.preventDefault();
@@ -134,10 +146,13 @@ export class CardBasket extends Item {
 		super(container, actions);
 
 		// Инициализация полей для карточки в корзине
-		this._button =
-			this.container.querySelector<HTMLButtonElement>('.card__button');
-		this._itemIndex = this.container.querySelector<HTMLImageElement>(
-			'.basket__item-index'
+		this._button = ensureElement<HTMLButtonElement>(
+			'.card__button',
+			this.container
+		);
+		this._itemIndex = ensureElement<HTMLImageElement>(
+			'.basket__item-index',
+			this.container
 		);
 
 		this._button.addEventListener('click', (event) => {

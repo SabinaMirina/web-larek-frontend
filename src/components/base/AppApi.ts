@@ -1,4 +1,4 @@
-import { IApi, IItem, TOrder, IOrderData } from '../../../types/index';
+import { IApi, IItem, TOrder, IOrderData } from '../../types';
 
 export class AppApi {
 	private _baseApi: IApi;

@@ -1,6 +1,6 @@
-import { IEvents } from '../events';
-import { createElement } from '../../../utils/utils';
-import { Component } from './Component';
+import { createElement, ensureElement } from '../../utils/utils';
+import { Component } from './base/Component';
+import { IEvents } from './base/EventEmitter';
 
 interface IBasketView {
 	items: HTMLElement[];
@@ -19,9 +19,15 @@ export class BasketView extends Component<IBasketView> {
 		super(container);
 		this.events = events;
 
-		this.list = this.container.querySelector('.basket__list');
-		this._priceElement = this.container.querySelector('.basket__price');
-		this._buttonT = this.container.querySelector('.basket__button');
+		this.list = ensureElement<HTMLElement>('.basket__list', this.container);
+		this._priceElement = ensureElement<HTMLElement>(
+			'.basket__price',
+			this.container
+		);
+		this._buttonT = ensureElement<HTMLButtonElement>(
+			'.basket__button',
+			this.container
+		);
 
 		this._buttonT.addEventListener('click', () =>
 			this.events.emit('order:open', { basket: this })
@@ -32,28 +38,20 @@ export class BasketView extends Component<IBasketView> {
 		if (items.length) {
 			this.list.replaceChildren(...items);
 		} else {
-			this.list.replaceChildren(
-				createElement<HTMLParagraphElement>('p', {
-					textContent: 'Корзина пуста',
-				})
-			);
+			const emptyBasketText = createElement<HTMLParagraphElement>('p');
+			this.setText(emptyBasketText, 'Корзина пуста');
+			this.list.replaceChildren(emptyBasketText);
 		}
 		this.updateButtonState();
 	}
 
 	set selected(items: string[]) {
-		if (items.length) {
-			this.setDisabled(this._buttonT, false);
-		} else {
-			this.setDisabled(this._buttonT, true);
-		}
+		this.setDisabled(this._buttonT, items.length === 0);
 	}
 
 	set totalNumber(value: number) {
 		this.price = value; // Обновляем числовое значение цены
-		if (this._priceElement) {
-			this.setText(this._priceElement, String(value));
-		}
+		this.setText(this._priceElement, `${value} синапсов`);
 	}
 
 	renderI(options: { content?: HTMLElement } = {}): HTMLElement {
@@ -66,11 +64,7 @@ export class BasketView extends Component<IBasketView> {
 	}
 
 	updateButtonState(): void {
-		if (this.list.children.length === 0) {
-			this.setDisabled(this._buttonT, true);
-		} else {
-			this.setDisabled(this._buttonT, false);
-		}
+		this.setDisabled(this._buttonT, this.list.children.length === 0);
 	}
 
 	public getItems(): HTMLCollection {

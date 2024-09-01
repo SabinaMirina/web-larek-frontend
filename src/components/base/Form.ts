@@ -1,7 +1,7 @@
-import { IEvents } from '../base/events';
 import { ensureElement } from '../../utils/utils';
 import { Component } from './base/Component';
 import { PaymentCategory } from '../../types';
+import { IEvents } from './base/EventEmitter';
 
 interface IFormState {
 	valid: boolean;
@@ -16,8 +16,10 @@ export abstract class Form<T> extends Component<IFormState> {
 		super(container);
 
 		this._errors = ensureElement<HTMLElement>('.form__errors', this.container);
-		this._submit =
-			this.container.querySelector<HTMLButtonElement>('.order__button');
+		this._submit = ensureElement<HTMLButtonElement>(
+			'.order__button',
+			this.container
+		);
 
 		this.container.addEventListener('input', (e: Event) => {
 			const target = e.target as HTMLInputElement;
@@ -40,11 +42,11 @@ export abstract class Form<T> extends Component<IFormState> {
 	}
 
 	set valid(value: boolean) {
-		this._submit.disabled = !value;
+		this.setDisabled(this._submit, !value);
 	}
 
 	set errors(value: string[]) {
-		this.setText(this._errors, value.join('\n')); // Вывод ошибок через перенос строки
+		this.setText(this._errors, value.join('\n'));
 	}
 
 	render(state: Partial<T> & IFormState) {
@@ -68,6 +70,7 @@ export class FormPaymentAddress extends Form<IFormPaymentAddress> {
 	protected toggleButtons: NodeListOf<HTMLButtonElement>;
 	private _addressField: HTMLInputElement;
 	private _addressError: HTMLElement;
+	private _selectedPaymentMethod: PaymentCategory | null = null; // Храним выбранный метод оплаты
 
 	constructor(
 		container: HTMLFormElement,
@@ -88,7 +91,6 @@ export class FormPaymentAddress extends Form<IFormPaymentAddress> {
 			this.container
 		);
 
-		// Инициализация кнопок переключения
 		this.initToggleButtons();
 
 		const onlineButton = Array.from(this.toggleButtons).find(
@@ -98,25 +100,21 @@ export class FormPaymentAddress extends Form<IFormPaymentAddress> {
 			this.handleToggleButton(onlineButton as HTMLButtonElement);
 		}
 
-		// обработчик изменения поля адреса для валидации
 		this._addressField.addEventListener('input', () => this.validateAddress());
 
-		// обработчик на кнопку submit, если он передан в actions
-		if (this._submit && actions?.onClick) {
-			this._submit.addEventListener('click', (event) => {
-				event.preventDefault();
-				actions.onClick(event); // Вызов переданного обработчика
-			});
-		} else {
-			console.warn('Submit button or onClick action not provided.');
-		}
+		// обработчик события submit формы
+		this.container.addEventListener('submit', (event: SubmitEvent) => {
+			event.preventDefault();
+			if (actions?.onClick) {
+				actions.onClick(event as unknown as MouseEvent); // Приводим SubmitEvent к MouseEvent
+			}
+			this.events.emit(`${this.container.name}:submit`);
+		});
 	}
 
 	getFormData(): IFormPaymentAddress {
 		return {
-			payment: this.container
-				.querySelector('button.button_active')
-				?.getAttribute('name') as PaymentCategory,
+			payment: this._selectedPaymentMethod,
 			address: this._addressField.value,
 		};
 	}
@@ -129,27 +127,29 @@ export class FormPaymentAddress extends Form<IFormPaymentAddress> {
 
 	handleToggleButton(clickedButton: HTMLButtonElement): void {
 		this.toggleButtons.forEach((button) => {
-			button.classList.remove('button_active');
+			this.toggleClass(button, 'button_active', false);
 		});
 
-		clickedButton.classList.add('button_active');
+		this.toggleClass(clickedButton, 'button_active', true);
 
-		const paymentMethod =
+		// Сохраняем выбранный метод оплаты вместо сохранения ссылки на кнопку
+		this._selectedPaymentMethod =
 			clickedButton.name === 'card'
 				? PaymentCategory.online
 				: PaymentCategory.cash;
-		this.onInputChange('payment', paymentMethod);
+
+		this.onInputChange('payment', this._selectedPaymentMethod);
 	}
 
 	validateAddress(): void {
 		const addressValue = this._addressField.value.trim();
 		if (addressValue === '') {
-			this._addressError.textContent = 'Заполните поле адрес';
-			this._addressError.style.display = 'block';
+			this.setText(this._addressError, 'Заполните поле адрес');
+			this.setVisible(this._addressError);
 			this.valid = false;
 		} else {
-			this._addressError.textContent = '';
-			this._addressError.style.display = 'none';
+			this.setText(this._addressError, '');
+			this.setHidden(this._addressError);
 			this.valid = true;
 		}
 	}
@@ -181,7 +181,6 @@ export class FormEmailPhone extends Form<IFormEmailPhone> {
 			'#email-error',
 			this.container
 		);
-
 		this._phoneField = ensureElement<HTMLInputElement>(
 			'input[name="phone"]',
 			this.container
@@ -191,21 +190,18 @@ export class FormEmailPhone extends Form<IFormEmailPhone> {
 			this.container
 		);
 
-		// обработчик изменения поля email для валидации
 		this._emailField.addEventListener('input', () => this.validateEmail());
-
-		// обработчик изменения поля адреса для валидации
 		this._phoneField.addEventListener('input', () => this.validatePhone());
 
-		// Навешиваем обработчик на кнопку submit, если он передан в actions
-		if (this._submit && actions?.onClick) {
-			this._submit.addEventListener('click', (event) => {
-				event.preventDefault();
-				actions.onClick(event); // Вызов переданного обработчика
-			});
-		} else {
-			console.warn('Submit button or onClick action not provided.');
-		}
+		// обработчик события submit формы
+		this.container.addEventListener('submit', (event: SubmitEvent) => {
+			event.preventDefault();
+			// Вызов действия, если оно передано в конструкторе
+			if (actions?.onClick) {
+				actions.onClick(event as unknown as MouseEvent); // Приводим SubmitEvent к MouseEvent
+			}
+			this.events.emit(`${this.container.name}:submit`);
+		});
 	}
 
 	getFormData(): IFormEmailPhone {
@@ -218,12 +214,12 @@ export class FormEmailPhone extends Form<IFormEmailPhone> {
 	validateEmail(): void {
 		const emailValue = this._emailField.value.trim();
 		if (emailValue === '') {
-			this._emailError.textContent = 'Заполните поле email';
-			this._emailError.style.display = 'block';
+			this.setText(this._emailError, 'Заполните поле email');
+			this.setVisible(this._emailError);
 			this.valid = false;
 		} else {
-			this._emailError.textContent = '';
-			this._emailError.style.display = 'none';
+			this.setText(this._emailError, '');
+			this.setHidden(this._emailError);
 			this.valid = true;
 		}
 	}
@@ -231,12 +227,12 @@ export class FormEmailPhone extends Form<IFormEmailPhone> {
 	validatePhone(): void {
 		const phoneValue = this._phoneField.value.trim();
 		if (phoneValue === '') {
-			this._phoneError.textContent = 'Заполните поле телефон';
-			this._phoneError.style.display = 'block';
+			this.setText(this._phoneError, 'Заполните поле телефон');
+			this.setVisible(this._phoneError);
 			this.valid = false;
 		} else {
-			this._phoneError.textContent = '';
-			this._phoneError.style.display = 'none';
+			this.setText(this._phoneError, '');
+			this.setHidden(this._phoneError);
 			this.valid = true;
 		}
 	}

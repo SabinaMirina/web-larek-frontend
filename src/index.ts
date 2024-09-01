@@ -1,15 +1,7 @@
 import './scss/styles.scss';
 
 import { API_URL, CDN_URL } from './utils/constants';
-import { EventEmitter } from './components/base/events';
 import { IApi, TOrder, PaymentCategory } from './types';
-import { Api } from './components/base/api';
-import { AppApi } from './components/base/base/AppApi';
-import {
-	CardBasket,
-	CardModal,
-	ItemsGallery,
-} from './components/base/base/Item';
 import { cloneTemplate, ensureElement } from './utils/utils';
 import { Modal } from './components/base/common/Modal';
 import { Page } from './components/base/Page';
@@ -18,9 +10,13 @@ import {
 	CatalogItemEvent,
 	ItemCatalog,
 } from './components/base/AppData';
-import { BasketView } from './components/base/base/Basket';
 import { FormEmailPhone, FormPaymentAddress } from './components/base/Form';
-import { IOrdersuccess, Ordersuccess } from './components/base/base/Success';
+import { AppApi } from './components/base/AppApi';
+import { Api } from './components/base/base/Api';
+import { EventEmitter } from './components/base/base/EventEmitter';
+import { BasketView } from './components/base/Basket';
+import { CardBasket, CardModal, ItemsGallery } from './components/base/Item';
+import { IOrderSuccess, OrderSuccess } from './components/base/Success';
 
 const events = new EventEmitter();
 const baseApi: IApi = new Api(API_URL);
@@ -115,12 +111,20 @@ events.on('preview:changed', (item: ItemCatalog) => {
 	}
 });
 
+// открытие корзины и добавление в нее элемента
 events.on('basket:open', (item: ItemCatalog) => {
 	if (item) {
 		// Проверяем, если товар уже в заказе
 		if (appData.order.items.includes(item.id)) {
 			return;
 		}
+
+		// Приводим item.price к числу и проверяем, если цена товара равна 0
+		const price = Number(item.price);
+		if (price === 0) {
+			return; // Если цена товара равна 0, выходим из функции
+		}
+
 		appData.toggleOrderedItem(item.id, true);
 		api
 			.getLoadItem(item.id)
@@ -202,6 +206,8 @@ events.on('item:deleted-from-basket', (item: ItemCatalog) => {
 
 	// Обновляем состояние кнопки
 	basket.updateButtonState();
+	// Обновляем счётчик товаров
+	page.counter = appData.getOrderItemCount();
 });
 
 // Реализация события открытия формы и добавления данных в order
@@ -239,23 +245,21 @@ events.on('order:payment-address-form-fulfilled', () => {
 			onClick: () => {
 				const emailPhoneData = formOrder.getFormData();
 				appData.updateOrderContacts(emailPhoneData.email, emailPhoneData.phone); // Обновляем контактную информацию заказа
-				events.emit('order:fullfilled');
 
-				// отправляем заказ на сервер
 				try {
-					const orderResponse = api.postOrder(
-						appData.getOrderItems() as TOrder
-					);
-					// Здесь можно добавить логику для подтверждения заказа, очистки корзины и т.д.
+					// отправляем заказ на сервер
+					api.postOrder(appData.getOrderItems() as TOrder);
+					// Эмитим событие успешного оформления заказа
+					events.emit('order:fullfilled');
+					// Очищаем корзину и сбрасываем отображаемую сумму только после успешной отправки заказа
+					appData.clearBasket();
+					basket.clearItems();
+					basket.totalNumber = 0;
+					page.counter = 0;
 				} catch (error) {
+					// Обработка ошибки отправки заказа
 					console.error('Failed to submit order:', error);
 				}
-				//очистка корзины
-				appData.clearBasket();
-				basket.clearItems();
-				// Сбрасываем отображаемую сумму
-				basket.totalNumber = 0;
-				page.counter = 0;
 			},
 		}
 	);
@@ -280,13 +284,13 @@ events.on('order:fullfilled', () => {
 	const totalPrice = appData.order.total;
 
 	// Создаем объект IOrdersuccess с включением итоговой суммы
-	const orderSuccess: IOrdersuccess = {
+	const orderSuccess: IOrderSuccess = {
 		title: 'Заказ успешно оформлен',
 		totalAmount: `Списано ${totalPrice} синапсов`,
 	};
 
 	// Создаем и рендерим Ordersuccess
-	const success = new Ordersuccess(
+	const success = new OrderSuccess(
 		cloneTemplate(orderSuccessTemplate),
 		events,
 		orderSuccess

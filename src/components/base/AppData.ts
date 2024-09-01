@@ -1,5 +1,4 @@
 import _ from 'lodash';
-import { Model } from './Model';
 import {
 	FormErrors,
 	IAppState,
@@ -8,6 +7,7 @@ import {
 	ItemCategory,
 	PaymentCategory,
 } from '../../types';
+import { Model } from './base/Model';
 
 export type CatalogItemEvent = {
 	catalog: ItemCatalog[];
@@ -57,16 +57,11 @@ export class AppState extends Model<IAppState> {
 
 	// Добавление или удаление товара из заказа
 	toggleOrderedItem(id: string, isIncluded: boolean) {
-		console.log(
-			`toggleOrderedItem called with id: ${id}, isIncluded: ${isIncluded}`
-		);
 		const index = this.order.items.indexOf(id);
 		if (isIncluded && index === -1) {
 			this.order.items.push(id);
-			console.log(`Item ${id} added. Current items:`, this.order.items);
 		} else if (!isIncluded && index !== -1) {
 			this.order.items.splice(index, 1);
-			console.log(`Item ${id} removed. Current items:`, this.order.items);
 		}
 
 		// Обновляем общую стоимость заказа
@@ -100,6 +95,7 @@ export class AppState extends Model<IAppState> {
 		if (!this.catalog || this.catalog.length === 0) {
 			return 0;
 		}
+
 		return this.order.items.reduce((total, itemId) => {
 			const item = this.catalog.find((item) => item.id === itemId);
 			return total + (item ? item.price : 0);
