@@ -39,6 +39,16 @@ const orderSuccessTemplate = ensureElement<HTMLTemplateElement>('#success');
 // Модель данных приложения  appData
 const appData = new AppState({}, events);
 
+// Переиспользуемые компоненты
+const formOrder = new FormEmailPhone(
+	cloneTemplate(contactsFormTemplate),
+	events
+);
+const formContact = new FormPaymentAddress(
+	cloneTemplate(orderFormTemplate),
+	events
+);
+
 // Глобальные контейнеры
 const page = new Page(document.body, events);
 const modal = new Modal(document.querySelector('.modal'), events);
@@ -115,35 +125,48 @@ events.on('preview:changed', (item: ItemCatalog) => {
 events.on('basket:open', (item: ItemCatalog) => {
 	if (item) {
 		// Проверяем, если товар уже в заказе
+
 		if (appData.order.items.includes(item.id)) {
 			return;
 		}
 
 		// Приводим item.price к числу и проверяем, если цена товара равна 0
+
 		const price = Number(item.price);
+
 		if (price === 0) {
 			return; // Если цена товара равна 0, выходим из функции
 		}
 
 		appData.toggleOrderedItem(item.id, true);
+
 		api
+
 			.getLoadItem(item.id)
 			.then((result) => {
 				console.log('ok', result);
+
 				item.title = result.title;
+
 				item.price = result.price;
 
 				// Получаем текущий индекс для нового товара
+
 				const itemIndex = appData.order.items.length;
 
 				// Создаем и рендерим карточку товара после добавления в заказ
+
 				const contentCard = new CardBasket(cloneTemplate(cardTemplateBasket), {
 					onClick: () => events.emit('item:deleted-from-basket', item),
 				});
+
 				contentCard.setItemId(item.id); // Устанавливаем ID для карточки
+
 				contentCard.index = itemIndex; // Устанавливаем индекс для карточки
+
 				const renderedCard = contentCard.render({
 					title: item.title,
+
 					price: item.price,
 				});
 
@@ -152,6 +175,7 @@ events.on('basket:open', (item: ItemCatalog) => {
 
 				// Обновляем итоговую сумму заказа после добавления товара
 				const basketPrice = appData.getTotal();
+
 				basket.totalNumber = basketPrice; // Обновляем отображение общей суммы
 
 				// Обновляем счётчик товаров
@@ -162,6 +186,7 @@ events.on('basket:open', (item: ItemCatalog) => {
 					content: basket.getContainer(), // Используем метод getContainer() для получения контейнера
 				});
 			})
+
 			.catch((err) => {
 				console.error(err);
 			});
@@ -194,10 +219,8 @@ events.on('item:deleted-from-basket', (item: ItemCatalog) => {
 	const remainingItems = Array.from(basket.getItems());
 	remainingItems.forEach((child, index) => {
 		const cardElement = child as HTMLElement;
-		const indexElement = cardElement.querySelector('.basket__item-index');
-		if (indexElement) {
-			indexElement.textContent = String(index + 1); // Обновляем индекс начиная с 1
-		}
+		const cardBasket = new CardBasket(cardElement);
+		cardBasket.index = index + 1;
 	});
 
 	// Обновляем итоговую сумму заказа после удаления товара
@@ -212,18 +235,6 @@ events.on('item:deleted-from-basket', (item: ItemCatalog) => {
 
 // Реализация события открытия формы и добавления данных в order
 events.on('order:open', () => {
-	const formContact = new FormPaymentAddress(
-		cloneTemplate(orderFormTemplate),
-		events,
-		{
-			onClick: () => {
-				const formData = formContact.getFormData();
-				events.emit('order:payment-address-form-fulfilled', formData);
-				appData.updateOrderDeliver(formData.payment, formData.address);
-			},
-		}
-	);
-
 	const initialState = {
 		valid: false,
 		errors: [] as string[],
@@ -237,33 +248,12 @@ events.on('order:open', () => {
 });
 
 // Форма email и телефон
-events.on('order:payment-address-form-fulfilled', () => {
-	const formOrder = new FormEmailPhone(
-		cloneTemplate(contactsFormTemplate),
-		events,
-		{
-			onClick: () => {
-				const emailPhoneData = formOrder.getFormData();
-				appData.updateOrderContacts(emailPhoneData.email, emailPhoneData.phone); // Обновляем контактную информацию заказа
+events.on('order:submit', () => {
+	const formData = formContact.getFormData();
 
-				try {
-					// отправляем заказ на сервер
-					api.postOrder(appData.getOrderItems() as TOrder);
-					// Эмитим событие успешного оформления заказа
-					events.emit('order:fullfilled');
-					// Очищаем корзину и сбрасываем отображаемую сумму только после успешной отправки заказа
-					appData.clearBasket();
-					basket.clearItems();
-					basket.totalNumber = 0;
-					page.counter = 0;
-				} catch (error) {
-					// Обработка ошибки отправки заказа
-					console.error('Failed to submit order:', error);
-				}
-			},
-		}
-	);
+	events.emit('order:payment-address-form-fulfilled', formData);
 
+	appData.updateOrderDeliver(formData.payment, formData.address);
 	// Создаем объект начального состояния формы
 	const initialState = {
 		valid: false,
@@ -279,7 +269,24 @@ events.on('order:payment-address-form-fulfilled', () => {
 });
 
 // Выводим сообщение об успешном заказе
-events.on('order:fullfilled', () => {
+events.on('contacts:submit', () => {
+	const emailPhoneData = formOrder.getFormData();
+	appData.updateOrderContacts(emailPhoneData.email, emailPhoneData.phone); // Обновляем контактную информацию заказа
+
+	try {
+		// Получаем данные заказа
+		const orderItems = appData.getOrderItems() as TOrder;
+		// Отправляем заказ на сервер
+		api.postOrder(orderItems);
+		// Очищаем корзину и сбрасываем отображаемую сумму только после успешной отправки заказа
+		appData.clearBasket();
+		basket.clearItems();
+		basket.totalNumber = 0;
+		page.counter = 0;
+	} catch (error) {
+		// Обработка ошибки отправки заказа
+		console.error('Failed to submit order:', error);
+	}
 	// Получаем итоговую сумму из AppState
 	const totalPrice = appData.order.total;
 
